@@ -441,8 +441,7 @@ export default function WorldPage() {
   const { data: session } = useSession();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [visitedLocations, setVisitedLocations] = useState<string[]>([]);
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [mapView, setMapView] = useState<"globe" | "satellite">("globe");
+    const [mapView, setMapView] = useState<"globe" | "satellite">("globe");
   const [zoomLevel, setZoomLevel] = useState(2);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
@@ -454,6 +453,7 @@ export default function WorldPage() {
   // Collapsible section states - all closed by default
   const [userChallengesOpen, setUserChallengesOpen] = useState(false);
   const [cohortChallengesOpen, setCohortChallengesOpen] = useState(false);
+  const [systemChallengesOpen, setSystemChallengesOpen] = useState(false);
   const [beginnerOpen, setBeginnerOpen] = useState(false);
   const [intermediateOpen, setIntermediateOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -516,6 +516,7 @@ export default function WorldPage() {
   const [customBusinessIndustry, setCustomBusinessIndustry] = useState("Technology");
   const [customSearchResults, setCustomSearchResults] = useState<Array<{ place_id: string; name: string; vicinity: string; types: string[] }>>([]);
   const [selectedCert, setSelectedCert] = useState("solutions-architect-associate"); // Default to Solutions Architect Associate
+  const [selectedSkillLevel, setSelectedSkillLevel] = useState<"beginner" | "intermediate" | "advanced" | "expert">("intermediate"); // Default skill level
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [showGenerationModal, setShowGenerationModal] = useState(false);
@@ -524,6 +525,7 @@ export default function WorldPage() {
     industry: string;
     latitude?: number;
     longitude?: number;
+    skillLevel?: "beginner" | "intermediate" | "advanced" | "expert";
   } | null>(null);
   const [activeIndustries, setActiveIndustries] = useState<Set<string>>(new Set([
     "Finance", "Healthcare", "Technology", "Retail", "Hospitality", "Automotive", "Education", "Aviation"
@@ -652,12 +654,10 @@ export default function WorldPage() {
       {/* Sidebar */}
       <div
         className={cn(
-          "h-full bg-background/95 backdrop-blur-xl border-r border-border/50 flex flex-col transition-all duration-300 z-20",
-          showSidebar ? "w-80" : "w-0"
+          "h-full w-80 bg-background/95 backdrop-blur-xl border-r border-border/50 flex flex-col"
         )}
       >
-        {showSidebar && (
-          <>
+        <>
             {/* Header */}
             <div className="p-4 border-b border-border/50">
               <div className="flex items-center justify-between mb-4">
@@ -830,14 +830,20 @@ export default function WorldPage() {
 
                 {/* System Challenges Section */}
                 <div className="rounded-lg border border-border/50 overflow-hidden">
-                  <div className="p-3 bg-secondary/30 border-b border-border/50">
+                  <button
+                    onClick={() => setSystemChallengesOpen(!systemChallengesOpen)}
+                    className="w-full p-3 bg-secondary/30 flex items-center justify-between hover:bg-secondary/50 transition-colors"
+                  >
                     <div className="flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-amber-400" />
                       <span className="font-medium text-sm">System Challenges</span>
                       <span className="text-xs text-muted-foreground">({filteredLocations.length})</span>
                     </div>
-                  </div>
+                    <ChevronRight className={cn("w-4 h-4 text-muted-foreground transition-transform", systemChallengesOpen && "rotate-90")} />
+                  </button>
                   
+                  {systemChallengesOpen && (
+                    <>
                   {/* Beginner */}
                   {beginnerLocations.length > 0 && (
                     <DifficultySection
@@ -888,6 +894,8 @@ export default function WorldPage() {
                       onLocationSelect={handleLocationSelect}
                       colorClass={difficultyColors.expert}
                     />
+                  )}
+                    </>
                   )}
                 </div>
               </div>
@@ -988,6 +996,27 @@ export default function WorldPage() {
                     <span className="text-cyan-400">{certifications.find(c => c.code === selectedCert)?.name || selectedCert}</span>
                   </div>
                   
+                  {/* Skill Level Selector */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Skill Level:</span>
+                    <select
+                      value={selectedSkillLevel}
+                      onChange={(e) => setSelectedSkillLevel(e.target.value as "beginner" | "intermediate" | "advanced" | "expert")}
+                      className={cn(
+                        "text-xs px-2 py-1 rounded-full border cursor-pointer appearance-none pr-6 [&>option]:bg-zinc-900 [&>option]:text-white",
+                        selectedSkillLevel === "beginner" && "border-green-500/50 bg-green-500/20 text-green-400",
+                        selectedSkillLevel === "intermediate" && "border-amber-500/50 bg-amber-500/20 text-amber-400",
+                        selectedSkillLevel === "advanced" && "border-orange-500/50 bg-orange-500/20 text-orange-400",
+                        selectedSkillLevel === "expert" && "border-red-500/50 bg-red-500/20 text-red-400"
+                      )}
+                    >
+                      <option value="beginner" className="bg-zinc-900 text-green-400">Beginner</option>
+                      <option value="intermediate" className="bg-zinc-900 text-amber-400">Intermediate</option>
+                      <option value="advanced" className="bg-zinc-900 text-orange-400">Advanced</option>
+                      <option value="expert" className="bg-zinc-900 text-red-400">Expert</option>
+                    </select>
+                  </div>
+                  
                   {/* Error message */}
                   {generationError && (
                     <div className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-md">
@@ -1015,6 +1044,7 @@ export default function WorldPage() {
                           industry: customBusinessIndustry,
                           latitude: targetCoords?.lat,
                           longitude: targetCoords?.lng,
+                          skillLevel: selectedSkillLevel,
                         });
                         setShowGenerationModal(true);
                       }}
@@ -1026,18 +1056,8 @@ export default function WorldPage() {
                 </div>
               </div>
             )}
-          </>
-        )}
+        </>
       </div>
-
-      {/* Toggle Sidebar Button */}
-      <button
-        onClick={() => setShowSidebar(!showSidebar)}
-        className="absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-background/80 backdrop-blur-sm border border-border/50 rounded-r-lg p-2 hover:bg-secondary transition-colors"
-        style={{ left: showSidebar ? "320px" : "0" }}
-      >
-        <ChevronRight className={cn("w-4 h-4 transition-transform", showSidebar && "rotate-180")} />
-      </button>
 
       {/* Map Container */}
       <div className="flex-1 relative">
@@ -1080,7 +1100,7 @@ export default function WorldPage() {
 
         {/* Industry Legend - only shows in satellite view */}
         {mapView === "satellite" && (
-          <div className="absolute bottom-4 left-4 z-[1000] bg-background/80 backdrop-blur-sm rounded-lg p-2 border border-border/50">
+          <div className="absolute bottom-4 left-4 z-20 bg-background/80 backdrop-blur-sm rounded-lg p-2 border border-border/50">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] text-muted-foreground font-medium">Industries</span>
               <span className="text-[9px] text-muted-foreground/60 italic">Click to filter</span>
@@ -1316,11 +1336,25 @@ export default function WorldPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Industry Tag */}
+                  {/* Skill Level Selector & Industry Tag */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs px-2 py-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
-                      Beginner
-                    </span>
+                    <select
+                      value={selectedSkillLevel}
+                      onChange={(e) => setSelectedSkillLevel(e.target.value as "beginner" | "intermediate" | "advanced" | "expert")}
+                      className={cn(
+                        "text-xs px-2 py-1 rounded-full border cursor-pointer appearance-none pr-6 [&>option]:bg-zinc-900 [&>option]:text-white",
+                        selectedSkillLevel === "beginner" && "border-green-500/50 bg-green-500/20 text-green-400",
+                        selectedSkillLevel === "intermediate" && "border-amber-500/50 bg-amber-500/20 text-amber-400",
+                        selectedSkillLevel === "advanced" && "border-orange-500/50 bg-orange-500/20 text-orange-400",
+                        selectedSkillLevel === "expert" && "border-red-500/50 bg-red-500/20 text-red-400"
+                      )}
+                      style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center", backgroundSize: "12px" }}
+                    >
+                      <option value="beginner" className="bg-zinc-900 text-green-400">Beginner</option>
+                      <option value="intermediate" className="bg-zinc-900 text-amber-400">Intermediate</option>
+                      <option value="advanced" className="bg-zinc-900 text-orange-400">Advanced</option>
+                      <option value="expert" className="bg-zinc-900 text-red-400">Expert</option>
+                    </select>
                     <span className="text-xs px-2 py-1 rounded-full bg-secondary text-muted-foreground">
                       {businessIndustry}
                     </span>
@@ -1371,8 +1405,10 @@ export default function WorldPage() {
                           industry: industry,
                           latitude: selectedBusiness?.lat,
                           longitude: selectedBusiness?.lng,
+                          skillLevel: selectedSkillLevel,
                         });
                         setShowGenerationModal(true);
+                        setSelectedBusiness(null); // Close the business card
                       }}
                     >
                       <Zap className="w-4 h-4" />
@@ -1437,6 +1473,7 @@ export default function WorldPage() {
             industry={generationTarget.industry}
             certCode={selectedCert}
             certName={certifications.find(c => c.code === selectedCert)?.name || selectedCert}
+            userLevel={generationTarget.skillLevel || "intermediate"}
             latitude={generationTarget.latitude}
             longitude={generationTarget.longitude}
             apiKey={userApiKey}
