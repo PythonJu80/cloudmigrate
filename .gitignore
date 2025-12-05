@@ -1,0 +1,49 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Next.js
+.next/
+out/
+build
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma
+prisma/dev.db
+prisma/dev.db-journal
+
+# IDE
+.idea
+.vscode
+
+# Crawl4AI RAG
+mcp-crawl4ai-rag/.env
+mcp-crawl4ai-rag/__pycache__/
+mcp-crawl4ai-rag/src/__pycache__/
+mcp-crawl4ai-rag/uv.lock

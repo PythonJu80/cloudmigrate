@@ -1,0 +1,6 @@
+# Mark vendor libraries as vendored (excluded from language stats)
+neovis.js/** linguist-vendored
+
+# Mark documentation as documentation
+docs/** linguist-documentation
+*.md linguist-documentation
