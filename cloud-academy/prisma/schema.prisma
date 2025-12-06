@@ -1188,6 +1188,7 @@ model AcademyUserProfile {
   
   locationProgress UserLocationProgress[]
   scenarioAttempts ScenarioAttempt[]
+  portfolios       AcademyPortfolio[]
   
   // Learning mode relations
   flashcardProgress FlashcardUserProgress[]
@@ -1200,6 +1201,69 @@ model AcademyUserProfile {
   @@index([academyTenantId])
   @@index([totalPoints])
   @@index([level])
+}
+
+// Portfolio - Generated PDF showcasing completed challenges
+model AcademyPortfolio {
+  id          String   @id @default(cuid())
+  
+  // Owner (null for example portfolios that all users see)
+  profileId   String?
+  profile     AcademyUserProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  // Portfolio identity
+  title       String
+  description String?  @db.Text
+  
+  // Status: draft, generating, ready, failed
+  status      String   @default("draft")
+  
+  // Type: example (system-provided), generated (from challenges)
+  type        String   @default("generated")
+  isExample   Boolean  @default(false)  // Example portfolios shown to all users
+  
+  // Content - The actual portfolio data
+  businessUseCase     String?  @db.Text  // Business context from scenario
+  problemStatement    String?  @db.Text  // What needed to be solved
+  solutionSummary     String?  @db.Text  // AI-generated summary of solution
+  awsServices         Json     @default("[]")  // AWS services used
+  architectureDiagram Json?    // {nodes, edges} from React Flow
+  diagramSvg          String?  @db.Text  // Pre-rendered SVG for PDF
+  keyDecisions        Json     @default("[]")  // Architectural decisions
+  complianceAchieved  Json     @default("[]")  // Compliance standards met
+  
+  // Scoring/Stats from the challenge
+  challengeScore      Int      @default(0)
+  maxScore            Int      @default(0)
+  completionTimeMinutes Int    @default(0)
+  hintsUsed           Int      @default(0)
+  
+  // Source references - which challenge this came from
+  scenarioAttemptId   String?
+  challengeProgressId String?
+  locationSlug        String?  // Which location/company
+  locationName        String?  // Denormalized for display
+  companyName         String?  // Denormalized for display
+  industry            String?  // Denormalized for display
+  
+  // PDF Generation
+  pdfUrl              String?  // URL to generated PDF
+  thumbnailUrl        String?  // URL to thumbnail for display
+  generatedAt         DateTime?
+  generationError     String?
+  
+  // Sharing
+  isPublic            Boolean  @default(false)
+  shareCode           String?  @unique  // Unique code for sharing
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([profileId])
+  @@index([status])
+  @@index([type])
+  @@index([isExample])
+  @@index([isPublic])
 }
 
 // User progress on a location (high-level)

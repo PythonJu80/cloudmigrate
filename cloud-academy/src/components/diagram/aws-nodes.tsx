@@ -91,6 +91,49 @@ const iconMap: Record<string, React.ComponentType<{ className?: string; style?: 
   "config": Settings,
 };
 
+// AWS service name to acronym mapping - only abbreviate long names
+const SERVICE_ACRONYMS: Record<string, string> = {
+  // Load balancers - always abbreviate
+  "Application Load Balancer": "ALB",
+  "Network Load Balancer": "NLB",
+  "Classic Load Balancer": "CLB",
+  "Elastic Load Balancer": "ELB",
+  // Gateways
+  "NAT Gateway": "NAT GW",
+  "Internet Gateway": "IGW",
+  "API Gateway": "API GW",
+  // Long service names
+  "Virtual Private Cloud": "VPC",
+  "Elastic Compute Cloud": "EC2",
+  "Relational Database Service": "RDS",
+  "Simple Storage Service": "S3",
+  "Elastic Container Service": "ECS",
+  "Elastic Kubernetes Service": "EKS",
+  "Key Management Service": "KMS",
+  "Identity and Access Management": "IAM",
+  "Simple Queue Service": "SQS",
+  "Simple Notification Service": "SNS",
+  "Web Application Firewall": "WAF",
+  "Auto Scaling Group": "ASG",
+  "Systems Manager": "SSM",
+  "Certificate Manager": "ACM",
+  // Keep these readable
+  "CloudFront Distribution": "CloudFront",
+  "S3 Bucket": "S3",
+  "ECS Fargate": "Fargate",
+  "Lambda Function": "Lambda",
+};
+
+// Get abbreviated label for diagram display
+function getAbbreviatedLabel(label: string): string {
+  if (SERVICE_ACRONYMS[label]) return SERVICE_ACRONYMS[label];
+  for (const [full, abbrev] of Object.entries(SERVICE_ACRONYMS)) {
+    if (label.toLowerCase().includes(full.toLowerCase())) return abbrev;
+  }
+  if (label.length > 14) return label.substring(0, 12) + "..";
+  return label;
+}
+
 // Handle styles - visible when selected
 const handleClass = (selected?: boolean) => cn(
   "!w-3 !h-3 !bg-cyan-500 !border-2 !border-cyan-600 transition-opacity",
@@ -131,8 +174,8 @@ export const AWSResourceNode = memo(({ data, selected }: { data: AWSResourceNode
         <Icon className="w-7 h-7" style={{ color }} />
       </div>
       
-      {/* Label */}
-      <p className="text-xs font-medium text-gray-800 text-center leading-tight">{data.label}</p>
+      {/* Label - abbreviated for cleaner display */}
+      <p className="text-xs font-medium text-gray-800 text-center leading-tight">{getAbbreviatedLabel(data.label)}</p>
       {data.sublabel && (
         <p className="text-[10px] text-gray-500 text-center mt-0.5">{data.sublabel}</p>
       )}
