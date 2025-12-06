@@ -10,6 +10,8 @@ export { ServicePicker } from "./service-picker";
 export { nodeTypes } from "./aws-nodes";
 export { AwsTerminal } from "./aws-terminal";
 export type { TerminalLine, AwsTerminalProps } from "./aws-terminal";
+export { CLISimulator } from "./cli-simulator";
+export type { CLISimulatorProps } from "./cli-simulator";
 export { DeploymentPanel } from "./deployment-panel";
 
 // Re-export generators for use in other components

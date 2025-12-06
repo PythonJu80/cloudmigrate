@@ -36,8 +36,18 @@ import {
   AlertCircle,
   Sparkles,
   Save,
+  Flame,
+  TrendingUp,
+  Lightbulb,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  validatePlacement,
+  updateScore,
+  createInitialScore,
+  type DiagramScore,
+} from "@/lib/aws-placement-rules";
 
 // Types for diagram data
 export interface DiagramNode extends Node {
@@ -120,6 +130,12 @@ function DiagramCanvasInner({
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // 🎮 GAMIFICATION STATE
+  const [diagramScore, setDiagramScore] = useState<DiagramScore>(createInitialScore());
+  const [proTip, setProTip] = useState<{ message: string; isError: boolean } | null>(null);
+  const [showScoreAnimation, setShowScoreAnimation] = useState<{ points: number; isPositive: boolean } | null>(null);
+  const proTipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Auto-save function
   const saveData = useCallback(() => {
     if (nodes.length === 0 && edges.length === 0) return;
@@ -188,6 +204,27 @@ function DiagramCanvasInner({
     setSelectedNode(null);
   }, []);
 
+  // 🎮 Show pro-tip with auto-dismiss
+  const showProTip = useCallback((message: string, isError: boolean = false) => {
+    // Clear existing timeout
+    if (proTipTimeoutRef.current) {
+      clearTimeout(proTipTimeoutRef.current);
+    }
+    
+    setProTip({ message, isError });
+    
+    // Auto-dismiss after 6 seconds
+    proTipTimeoutRef.current = setTimeout(() => {
+      setProTip(null);
+    }, 6000);
+  }, []);
+
+  // 🎮 Show score animation
+  const animateScore = useCallback((points: number) => {
+    setShowScoreAnimation({ points, isPositive: points > 0 });
+    setTimeout(() => setShowScoreAnimation(null), 1500);
+  }, []);
+
   // Handle drag start from service picker
   const onServiceDragStart = useCallback((event: React.DragEvent, service: AWSService) => {
     event.dataTransfer.setData("application/aws-service", JSON.stringify(service));
@@ -231,7 +268,7 @@ function DiagramCanvasInner({
     [nodes]
   );
 
-  // Handle drop - create new node
+  // Handle drop - create new node with VALIDATION
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -262,23 +299,68 @@ function DiagramCanvasInner({
         autoScaling: { width: 150, height: 100 },
       };
 
-      // Check if dropping inside a container (for non-container nodes, or subnet inside VPC)
+      // Check if dropping inside a container
       let parentId: string | undefined;
       let relativePosition = position;
+      let targetType: string | null = null;
+      let targetSubnetType: "public" | "private" | undefined;
       
-      // Services that should be OUTSIDE VPC (global services)
-      const globalServices = ["s3", "cloudfront", "route53", "dynamodb", "iam", "cognito", "kms", "cloudwatch", "cloudtrail"];
-      
-      if (!globalServices.includes(service.id)) {
-        const container = findContainerAtPosition(position);
-        if (container) {
-          parentId = container.id;
-          // Convert to position relative to parent
-          relativePosition = {
-            x: position.x - container.position.x,
-            y: position.y - container.position.y,
-          };
+      const container = findContainerAtPosition(position);
+      if (container) {
+        // Get the container's type for validation
+        // For subnets, we need to use "subnet-public" or "subnet-private" as the key
+        targetSubnetType = container.data?.subnetType as "public" | "private" | undefined;
+        if (container.type === "subnet" && targetSubnetType) {
+          targetType = `subnet-${targetSubnetType}`;
+        } else {
+          targetType = container.type || null;
         }
+        
+        // 🎮 VALIDATE PLACEMENT
+        const validation = validatePlacement(service.id, targetType, targetSubnetType);
+        
+        if (!validation.isValid) {
+          // ❌ REJECTED! Show pro-tip and animate rejection
+          showProTip(validation.proTip || "This service cannot be placed here.", true);
+          animateScore(validation.pointsAwarded);
+          
+          // Update score (negative points)
+          setDiagramScore(prev => updateScore(prev, validation, service.id, targetType));
+          
+          // Don't add the node - it's rejected!
+          return;
+        }
+        
+        // ✅ Valid placement inside container
+        parentId = container.id;
+        relativePosition = {
+          x: position.x - container.position.x,
+          y: position.y - container.position.y,
+        };
+        
+        // Award points for correct placement
+        animateScore(validation.pointsAwarded);
+        setDiagramScore(prev => updateScore(prev, validation, service.id, targetType));
+        
+        // Show positive feedback for streak
+        if (diagramScore.currentStreak >= 2) {
+          showProTip(`🔥 ${diagramScore.currentStreak + 1} correct in a row! +${validation.pointsAwarded} points`, false);
+        }
+      } else {
+        // Dropping on canvas (not in container)
+        // Validate canvas-level placement
+        const validation = validatePlacement(service.id, "canvas", undefined);
+        
+        if (!validation.isValid) {
+          showProTip(validation.proTip || "This service cannot be placed here.", true);
+          animateScore(validation.pointsAwarded);
+          setDiagramScore(prev => updateScore(prev, validation, service.id, "canvas"));
+          return;
+        }
+        
+        // Award points
+        animateScore(validation.pointsAwarded);
+        setDiagramScore(prev => updateScore(prev, validation, service.id, "canvas"));
       }
 
       // Get size for this node type
@@ -289,8 +371,7 @@ function DiagramCanvasInner({
         type: nodeType,
         position: relativePosition,
         parentId,
-        extent: parentId ? "parent" : undefined, // Keep inside parent bounds
-        // Set width/height at node level for React Flow resizing
+        extent: parentId ? "parent" : undefined,
         ...(size && { width: size.width, height: size.height }),
         style: size ? { width: size.width, height: size.height } : undefined,
         data: {
@@ -301,13 +382,12 @@ function DiagramCanvasInner({
           config: service.defaultConfig || {},
           subnetType: service.id === "subnet-public" ? "public" : service.id === "subnet-private" ? "private" : undefined,
         },
-        // Containers should be behind resources
         zIndex: service.isContainer ? 0 : 10,
       };
 
       setNodes((nds) => nds.concat(newNode));
     },
-    [screenToFlowPosition, setNodes, findContainerAtPosition]
+    [screenToFlowPosition, setNodes, findContainerAtPosition, showProTip, animateScore, diagramScore.currentStreak]
   );
 
   // Delete selected node
@@ -425,6 +505,36 @@ function DiagramCanvasInner({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* 🎮 GAMIFICATION: Live Score Display */}
+            <div className="flex items-center gap-3 mr-4">
+              {/* Points */}
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30">
+                <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="text-sm font-bold text-white">{diagramScore.totalPoints}</span>
+                <span className="text-xs text-slate-400">pts</span>
+              </div>
+              
+              {/* Streak */}
+              {diagramScore.currentStreak >= 2 && (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 animate-pulse">
+                  <Flame className="w-3.5 h-3.5 text-orange-400" />
+                  <span className="text-xs font-bold text-orange-400">{diagramScore.currentStreak}x</span>
+                </div>
+              )}
+              
+              {/* Score Animation */}
+              {showScoreAnimation && (
+                <div
+                  className={cn(
+                    "absolute top-16 right-48 text-lg font-bold animate-bounce",
+                    showScoreAnimation.isPositive ? "text-green-400" : "text-red-400"
+                  )}
+                >
+                  {showScoreAnimation.isPositive ? "+" : ""}{showScoreAnimation.points}
+                </div>
+              )}
+            </div>
+
             {/* Audit Result Badge */}
             {auditResult && (
               <div
@@ -524,6 +634,43 @@ function DiagramCanvasInner({
             />
             <Controls className="!bg-slate-800 !border-slate-700 !rounded-lg [&>button]:!bg-slate-800 [&>button]:!border-slate-700 [&>button]:!text-slate-400 [&>button:hover]:!bg-slate-700" />
           </ReactFlow>
+
+          {/* 🎮 PRO-TIP TOAST */}
+          {proTip && (
+            <div
+              className={cn(
+                "absolute bottom-4 left-1/2 -translate-x-1/2 max-w-lg px-4 py-3 rounded-lg shadow-2xl border backdrop-blur-sm animate-in slide-in-from-bottom-4 duration-300",
+                proTip.isError
+                  ? "bg-red-950/90 border-red-500/50 text-red-100"
+                  : "bg-emerald-950/90 border-emerald-500/50 text-emerald-100"
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div className={cn(
+                  "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
+                  proTip.isError ? "bg-red-500/20" : "bg-emerald-500/20"
+                )}>
+                  {proTip.isError ? (
+                    <X className="w-4 h-4 text-red-400" />
+                  ) : (
+                    <Lightbulb className="w-4 h-4 text-emerald-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium mb-0.5">
+                    {proTip.isError ? "❌ Invalid Placement" : "💡 Pro Tip"}
+                  </p>
+                  <p className="text-xs opacity-90">{proTip.message}</p>
+                </div>
+                <button
+                  onClick={() => setProTip(null)}
+                  className="flex-shrink-0 p-1 hover:bg-white/10 rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Audit Feedback Panel */}

@@ -3426,6 +3426,227 @@ async def grade_challenge_answer_endpoint(request: GradeChallengeAnswerRequest):
         set_request_model(None)
 
 
+# =============================================================================
+# CLI SIMULATOR ENDPOINTS
+# =============================================================================
+
+# In-memory session storage (in production, use Redis)
+_cli_sessions: Dict[str, Any] = {}
+
+
+class CLISimulatorRequest(BaseModel):
+    """Request to simulate an AWS CLI command"""
+    command: str
+    session_id: Optional[str] = None
+    challenge_context: Optional[Dict[str, Any]] = None  # title, description, aws_services, success_criteria
+    company_name: str = "Acme Corp"
+    industry: str = "Technology"
+    business_context: str = ""
+    openai_api_key: Optional[str] = None
+    preferred_model: Optional[str] = None
+
+
+class CLIHelpRequest(BaseModel):
+    """Request for CLI help on a topic"""
+    topic: str
+    challenge_context: Optional[Dict[str, Any]] = None
+    user_level: str = "intermediate"
+    openai_api_key: Optional[str] = None
+    preferred_model: Optional[str] = None
+
+
+@app.post("/api/learning/cli-simulate")
+async def cli_simulate_endpoint(request: CLISimulatorRequest):
+    """
+    Simulate an AWS CLI command in a sandboxed environment.
+    Returns realistic AWS CLI output with teaching content.
+    """
+    from generators.cli_simulator import simulate_cli_command, create_session, CLISession
+    
+    try:
+        # Set request-scoped API key and model if provided (BYOK)
+        from utils import set_request_api_key, set_request_model
+        if request.openai_api_key:
+            set_request_api_key(request.openai_api_key)
+        if request.preferred_model:
+            set_request_model(request.preferred_model)
+        
+        # Get or create session
+        session_id = request.session_id
+        if session_id and session_id in _cli_sessions:
+            session_data = _cli_sessions[session_id]
+            session = CLISession(**session_data)
+        else:
+            session = create_session(
+                challenge_id=request.challenge_context.get("id") if request.challenge_context else None
+            )
+            session_id = session.session_id
+        
+        # Simulate the command
+        result = await simulate_cli_command(
+            command=request.command,
+            session=session,
+            challenge_context=request.challenge_context,
+            company_name=request.company_name,
+            industry=request.industry,
+            business_context=request.business_context,
+            api_key=request.openai_api_key,
+            model=request.preferred_model,
+        )
+        
+        # Save session state
+        _cli_sessions[session_id] = session.model_dump()
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "command": result.command,
+            "output": result.output,
+            "exit_code": result.exit_code,
+            "explanation": result.explanation,
+            "next_steps": result.next_steps,
+            "is_dangerous": result.is_dangerous,
+            "warning": result.warning,
+            # Validation and progress fields
+            "is_correct_for_challenge": result.is_correct_for_challenge,
+            "objective_completed": result.objective_completed,
+            "points_earned": result.points_earned,
+            "aws_service": result.aws_service,
+            "command_type": result.command_type,
+            # Session progress
+            "session_progress": {
+                "total_commands": session.total_commands,
+                "correct_commands": session.correct_commands,
+                "current_streak": session.current_streak,
+                "best_streak": session.best_streak,
+                "objectives_completed": session.objectives_completed,
+                "total_points": session.points_earned,
+            }
+        }
+    except Exception as e:
+        logger.error(f"CLI simulate error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        from utils import set_request_api_key, set_request_model
+        set_request_api_key(None)
+        set_request_model(None)
+
+
+@app.post("/api/learning/cli-help")
+async def cli_help_endpoint(request: CLIHelpRequest):
+    """Get contextual CLI help for a topic."""
+    from generators.cli_simulator import get_cli_help
+    
+    try:
+        from utils import set_request_api_key, set_request_model
+        if request.openai_api_key:
+            set_request_api_key(request.openai_api_key)
+        if request.preferred_model:
+            set_request_model(request.preferred_model)
+        
+        result = await get_cli_help(
+            topic=request.topic,
+            challenge_context=request.challenge_context,
+            user_level=request.user_level,
+            api_key=request.openai_api_key,
+            model=request.preferred_model,
+        )
+        
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"CLI help error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        from utils import set_request_api_key, set_request_model
+        set_request_api_key(None)
+        set_request_model(None)
+
+
+@app.delete("/api/learning/cli-session/{session_id}")
+async def cli_session_delete(session_id: str):
+    """Delete a CLI simulator session."""
+    if session_id in _cli_sessions:
+        del _cli_sessions[session_id]
+        return {"success": True, "message": "Session deleted"}
+    return {"success": False, "message": "Session not found"}
+
+
+@app.get("/api/learning/cli-session/{session_id}/stats")
+async def cli_session_stats(session_id: str):
+    """Get statistics for a CLI session."""
+    from generators.cli_simulator import get_session_stats, CLISession
+    
+    if session_id not in _cli_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = CLISession(**_cli_sessions[session_id])
+    stats = get_session_stats(session)
+    
+    return {"success": True, **stats}
+
+
+class CLIValidateRequest(BaseModel):
+    """Request to validate CLI session against challenge"""
+    session_id: str
+    challenge_context: Dict[str, Any]
+    openai_api_key: Optional[str] = None
+    preferred_model: Optional[str] = None
+
+
+@app.post("/api/learning/cli-validate")
+async def cli_validate_endpoint(request: CLIValidateRequest):
+    """
+    Validate a CLI session against challenge objectives.
+    Returns score, completed objectives, and feedback.
+    """
+    from generators.cli_simulator import validate_cli_challenge, CLISession
+    
+    if request.session_id not in _cli_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    try:
+        from utils import set_request_api_key, set_request_model
+        if request.openai_api_key:
+            set_request_api_key(request.openai_api_key)
+        if request.preferred_model:
+            set_request_model(request.preferred_model)
+        
+        session = CLISession(**_cli_sessions[request.session_id])
+        
+        result = await validate_cli_challenge(
+            session=session,
+            challenge_context=request.challenge_context,
+            api_key=request.openai_api_key,
+            model=request.preferred_model,
+        )
+        
+        return {
+            "success": True,
+            "is_complete": result.is_complete,
+            "score": result.score,
+            "objectives_met": result.objectives_met,
+            "objectives_missing": result.objectives_missing,
+            "correct_commands": result.correct_commands,
+            "incorrect_commands": result.incorrect_commands,
+            "feedback": result.feedback,
+            "suggestions": result.suggestions,
+            # Include session stats
+            "session_stats": {
+                "total_commands": session.total_commands,
+                "correct_commands": session.correct_commands,
+                "best_streak": session.best_streak,
+                "points_earned": session.points_earned,
+            }
+        }
+    except Exception as e:
+        logger.error(f"CLI validate error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        from utils import set_request_api_key, set_request_model
+        set_request_api_key(None)
+        set_request_model(None)
+
+
 @app.post("/api/learning/generate-flashcards")
 async def generate_flashcards_endpoint(request: GenerateContentRequest):
     """Generate flashcards for a scenario - persona-aware"""

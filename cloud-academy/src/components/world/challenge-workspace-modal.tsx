@@ -27,9 +27,9 @@ import dynamic from "next/dynamic";
 import type { DiagramData, AuditResult } from "@/components/diagram";
 import { Terminal } from "lucide-react";
 
-// Dynamically import AwsTerminal to avoid SSR issues
-const AwsTerminal = dynamic(
-  () => import("@/components/diagram").then((mod) => mod.AwsTerminal),
+// Dynamically import CLISimulator (AI-powered sandbox terminal)
+const CLISimulator = dynamic(
+  () => import("@/components/diagram").then((mod) => mod.CLISimulator),
   { 
     ssr: false,
     loading: () => (
@@ -177,23 +177,6 @@ export function ChallengeWorkspaceModal({
   
   // Right panel state (chat or terminal)
   const [rightPanelTab, setRightPanelTab] = useState<"chat" | "terminal">("chat");
-  const [hasAwsCredentials, setHasAwsCredentials] = useState(false);
-  
-  // Check AWS credentials on mount
-  useEffect(() => {
-    const checkAwsCredentials = async () => {
-      try {
-        const res = await fetch("/api/settings/aws");
-        if (res.ok) {
-          const data = await res.json();
-          setHasAwsCredentials(data.hasCredentials || false);
-        }
-      } catch {
-        // Ignore errors
-      }
-    };
-    checkAwsCredentials();
-  }, []);
 
   // Hint state per question
   const [revealedQuestionHints, setRevealedQuestionHints] = useState<Set<string>>(new Set());
@@ -559,19 +542,19 @@ export function ChallengeWorkspaceModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
-        className="max-w-[95vw] w-[1400px] h-[90vh] p-0 gap-0 bg-slate-950 border border-slate-800 overflow-hidden flex flex-col z-[100] [&>button]:hidden"
+        className="!grid-cols-1 max-w-[95vw] w-[1400px] h-[90vh] p-0 gap-0 bg-slate-950 border border-slate-800 overflow-hidden !flex !flex-col z-[100] [&>button]:hidden"
         aria-describedby={undefined}
       >
         <VisuallyHidden>
           <DialogTitle>{challenge.title} - Challenge Workspace</DialogTitle>
         </VisuallyHidden>
         {/* Header */}
-        <div className="h-12 flex items-center justify-between px-4 border-b border-slate-800 bg-slate-900 shrink-0">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
+        <div className="h-12 flex items-center justify-between px-4 border-b border-slate-800 bg-slate-900 shrink-0 w-full">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Button variant="ghost" size="icon-sm" onClick={onClose} className="shrink-0">
               <X className="w-4 h-4" />
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs text-slate-500">{challengeIndex + 1}/{totalChallenges}</span>
               <span className={cn("text-xs px-2 py-0.5 rounded", difficultyColor)}>
                 {challenge.difficulty}
@@ -583,20 +566,20 @@ export function ChallengeWorkspaceModal({
                 </span>
               )}
             </div>
-            <span className="text-sm font-medium text-slate-200">{challenge.title}</span>
+            <span className="text-sm font-medium text-slate-200 truncate">{challenge.title}</span>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1 rounded bg-cyan-500/10 border border-cyan-500/30">
-              <Trophy className="w-4 h-4 text-cyan-400" />
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-cyan-500/10 border border-cyan-500/30">
+              <Trophy className="w-4 h-4 text-cyan-400 shrink-0" />
               <span className="text-sm font-medium text-cyan-400">{earnedPoints}</span>
               <span className="text-xs text-slate-500">/ {questionsData?.total_points || challenge.points} pts</span>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={onPrevChallenge} disabled={challengeIndex === 0} className="h-8 w-8">
+              <Button variant="ghost" size="icon-sm" onClick={onPrevChallenge} disabled={challengeIndex === 0}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={onNextChallenge} disabled={challengeIndex === totalChallenges - 1} className="h-8 w-8">
+              <Button variant="ghost" size="icon-sm" onClick={onNextChallenge} disabled={challengeIndex === totalChallenges - 1}>
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
@@ -604,9 +587,9 @@ export function ChallengeWorkspaceModal({
         </div>
 
         {/* Main workspace area */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Main content area - Brief always visible, then Questions OR Drawing */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Loading State */}
             {isLoadingQuestions && (
               <div className="flex-1 flex items-center justify-center">
@@ -634,7 +617,7 @@ export function ChallengeWorkspaceModal({
 
             {/* Questions Content */}
             {questionsData && !isLoadingQuestions && (
-              <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 flex flex-col overflow-hidden min-h-0">
                 {/* Brief Section - Always Visible */}
                 <div className="shrink-0 border-b border-slate-800 bg-slate-900/50 p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -994,16 +977,15 @@ export function ChallengeWorkspaceModal({
                       AWS CLI
                     </button>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsChatOpen(false)}>
+                  <Button variant="ghost" size="icon-sm" onClick={() => setIsChatOpen(false)}>
                     <PanelRightClose className="w-4 h-4" />
                   </Button>
                 </>
               ) : (
-                <div className="flex flex-col items-center gap-2 py-2">
+                <div className="flex items-center justify-center gap-1 w-full">
                   <Button 
                     variant="ghost" 
-                    size="icon" 
-                    className="h-9 w-9"
+                    size="icon-sm"
                     onClick={() => { setIsChatOpen(true); setRightPanelTab("chat"); }}
                     title="AI Coach"
                   >
@@ -1011,10 +993,9 @@ export function ChallengeWorkspaceModal({
                   </Button>
                   <Button 
                     variant="ghost" 
-                    size="icon" 
-                    className="h-9 w-9"
+                    size="icon-sm"
                     onClick={() => { setIsChatOpen(true); setRightPanelTab("terminal"); }}
-                    title="AWS Terminal"
+                    title="CLI Sandbox"
                   >
                     <Terminal className="w-4 h-4 text-green-400" />
                   </Button>
@@ -1093,63 +1074,26 @@ export function ChallengeWorkspaceModal({
               </>
             )}
 
-            {/* Terminal content */}
+            {/* CLI Simulator - AI-powered sandbox terminal */}
             {isChatOpen && rightPanelTab === "terminal" && (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <AwsTerminal
-                  className="flex-1 rounded-none border-0"
-                  hasAwsCredentials={hasAwsCredentials}
-                  onCommandExecuted={(cmd, output) => {
-                    console.log(`[AWS CLI] ${cmd}`, output);
-                  }}
-                />
-                
-                {/* Quick actions */}
-                <div className="p-2 border-t border-slate-800 bg-slate-900/50">
-                  <div className="flex flex-wrap gap-1">
-                    <button
-                      onClick={() => {
-                        // This would trigger the terminal to run this command
-                        const event = new CustomEvent("aws-terminal-command", { 
-                          detail: "aws sts get-caller-identity" 
-                        });
-                        window.dispatchEvent(event);
-                      }}
-                      className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-slate-300 hover:bg-slate-700"
-                    >
-                      Verify Credentials
-                    </button>
-                    <button
-                      onClick={() => {
-                        const event = new CustomEvent("aws-terminal-command", { 
-                          detail: "aws ec2 describe-vpcs" 
-                        });
-                        window.dispatchEvent(event);
-                      }}
-                      className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-slate-300 hover:bg-slate-700"
-                    >
-                      List VPCs
-                    </button>
-                    <button
-                      onClick={() => {
-                        const event = new CustomEvent("aws-terminal-command", { 
-                          detail: "aws s3 ls" 
-                        });
-                        window.dispatchEvent(event);
-                      }}
-                      className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-slate-300 hover:bg-slate-700"
-                    >
-                      List S3 Buckets
-                    </button>
-                  </div>
-                  
-                  {!hasAwsCredentials && (
-                    <p className="text-[10px] text-amber-400 mt-2">
-                      ⚠️ Add AWS credentials in Settings to run commands
-                    </p>
-                  )}
-                </div>
-              </div>
+              <CLISimulator
+                className="flex-1"
+                challengeContext={{
+                  id: challenge.id,
+                  title: challenge.title,
+                  description: challenge.description,
+                  aws_services: challenge.aws_services_relevant,
+                  success_criteria: challenge.success_criteria,
+                }}
+                companyName={scenario.company_name}
+                industry={industry || (companyInfo?.industry as string) || "Technology"}
+                businessContext={scenario.business_context}
+                apiKey={apiKey}
+                preferredModel={preferredModel}
+                onCommandExecuted={(cmd: string, output: string) => {
+                  console.log(`[CLI Simulator] ${cmd}`, output);
+                }}
+              />
             )}
           </div>
         </div>

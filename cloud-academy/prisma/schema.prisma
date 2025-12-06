@@ -1197,6 +1197,9 @@ model AcademyUserProfile {
   quizAttempts QuizAttempt[]
   customLocations CustomLocation[]
   
+  // CLI proficiency tracking
+  cliProficiency CLIProficiency?
+  
   @@index([academyUserId])
   @@index([academyTenantId])
   @@index([totalPoints])
@@ -1385,9 +1388,92 @@ model ChallengeProgress {
   feedback      Json?    // { score, strengths, improvements, suggestions }
   evaluatedAt   DateTime?
   
+  // CLI practice progress
+  cliProgress   CLIProgress?
+  
   @@unique([attemptId, challengeId])
   @@index([challengeId])
   @@index([status])
+}
+
+// CLI Practice Progress - tracks user's command-line learning
+model CLIProgress {
+  id              String   @id @default(cuid())
+  
+  // Link to challenge progress
+  challengeProgressId String @unique
+  challengeProgress   ChallengeProgress @relation(fields: [challengeProgressId], references: [id], onDelete: Cascade)
+  
+  // Session tracking
+  sessionId       String?  // Current CLI session ID
+  
+  // Commands executed
+  commandsRun     Json     @default("[]")  // [{ command, timestamp, exitCode, isCorrect }]
+  totalCommands   Int      @default(0)
+  correctCommands Int      @default(0)
+  syntaxErrors    Int      @default(0)
+  
+  // Simulated resources created
+  resourcesCreated Json    @default("{}")  // { "vpc": ["vpc-123"], "ec2": ["i-456"] }
+  
+  // Challenge-specific validation
+  objectivesCompleted Json @default("[]")  // ["created_vpc", "configured_security_group"]
+  objectivesTotal     Int  @default(0)
+  
+  // Scoring
+  cliScore        Int      @default(0)     // 0-100 based on correct commands
+  pointsEarned    Int      @default(0)     // Points for CLI portion
+  
+  // Learning metrics
+  hintsRequested  Int      @default(0)
+  helpTopicsViewed Json    @default("[]")  // ["ec2", "vpc", "s3"]
+  
+  // Streaks
+  currentStreak   Int      @default(0)     // Consecutive correct commands
+  bestStreak      Int      @default(0)     // Best streak this session
+  
+  // Timing
+  startedAt       DateTime @default(now())
+  lastCommandAt   DateTime?
+  completedAt     DateTime?
+  
+  @@index([challengeProgressId])
+}
+
+// User's overall CLI proficiency (aggregated across all challenges)
+model CLIProficiency {
+  id              String   @id @default(cuid())
+  
+  profileId       String   @unique
+  profile         AcademyUserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  // Overall stats
+  totalCommands   Int      @default(0)
+  correctCommands Int      @default(0)
+  accuracy        Float    @default(0)     // correctCommands / totalCommands
+  
+  // Service-specific proficiency
+  serviceStats    Json     @default("{}")  // { "ec2": { commands: 50, correct: 45 }, "s3": {...} }
+  
+  // Achievements
+  commandsMastered Json    @default("[]")  // ["aws ec2 describe-instances", "aws s3 ls"]
+  
+  // Streaks
+  currentDailyStreak Int   @default(0)     // Days in a row with CLI practice
+  bestDailyStreak    Int   @default(0)
+  lastPracticeDate   DateTime?
+  
+  // Level progression
+  cliLevel        Int      @default(1)     // 1-10 CLI mastery level
+  cliXp           Int      @default(0)     // XP towards next level
+  
+  // Badges earned
+  badges          Json     @default("[]")  // ["first_command", "vpc_master", "100_commands"]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([profileId])
 }
 
 // Team challenge attempts (for team competitions)
