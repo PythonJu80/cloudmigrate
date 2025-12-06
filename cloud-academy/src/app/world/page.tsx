@@ -761,7 +761,7 @@ export default function WorldPage() {
   }, []);
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-slate-950 flex">
+    <div className="h-screen w-full overflow-hidden bg-slate-950 flex">
       {/* Sidebar */}
       <div
         className={cn(
@@ -1225,7 +1225,7 @@ export default function WorldPage() {
       </div>
 
       {/* Map Container */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative h-full">
         {/* Map Controls - show current view indicator */}
         <div className="absolute top-4 right-4 z-[1000]">
           {mapView === "globe" ? (

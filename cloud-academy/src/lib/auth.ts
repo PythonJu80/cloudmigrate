@@ -239,6 +239,18 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      // Always fetch fresh subscription tier from DB (it can change without re-login)
+      let freshSubscriptionTier = token.subscriptionTier;
+      if (token.academyProfileId) {
+        const profile = await prisma.academyUserProfile.findUnique({
+          where: { id: token.academyProfileId },
+          select: { subscriptionTier: true },
+        });
+        if (profile) {
+          freshSubscriptionTier = profile.subscriptionTier;
+        }
+      }
+      
       session.user = {
         id: token.id,
         email: token.email,
@@ -250,7 +262,7 @@ export const authOptions: NextAuthOptions = {
         tenantName: token.tenantName,
         tenantSlug: token.tenantSlug,
         academyProfileId: token.academyProfileId,
-        subscriptionTier: token.subscriptionTier,
+        subscriptionTier: freshSubscriptionTier,
       };
       return session;
     },

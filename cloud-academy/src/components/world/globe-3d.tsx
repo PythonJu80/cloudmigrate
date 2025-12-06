@@ -117,6 +117,7 @@ export default function Globe3D({
   const [GlobeModule, setGlobeModule] = useState<React.ComponentType<any> | null>(null);
   const [hoveredContinent, setHoveredContinent] = useState<string | null>(null);
   const [selectedContinent, setSelectedContinent] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   // Load Globe.gl dynamically (client-side only)
   useEffect(() => {
@@ -125,6 +126,39 @@ export default function Globe3D({
       setGlobeModule(() => mod.default);
     });
   }, []);
+
+  // Track container dimensions with ResizeObserver
+  useEffect(() => {
+    if (!globeRef.current) return;
+    
+    const updateDimensions = () => {
+      if (globeRef.current) {
+        const rect = globeRef.current.getBoundingClientRect();
+        const width = rect.width || globeRef.current.clientWidth || 800;
+        const height = rect.height || globeRef.current.clientHeight || window.innerHeight;
+        if (width > 0 && height > 0) {
+          setDimensions({ width, height });
+        }
+      }
+    };
+    
+    // Initial measurement after a brief delay to ensure layout is complete
+    updateDimensions();
+    const initialTimeout = setTimeout(updateDimensions, 100);
+    
+    // Watch for resize
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    resizeObserver.observe(globeRef.current);
+    
+    // Also listen to window resize as fallback
+    window.addEventListener('resize', updateDimensions);
+    
+    return () => {
+      clearTimeout(initialTimeout);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, [isClient, GlobeModule]);
 
   const [isZooming, setIsZooming] = useState(false);
   const [zoomingTo, setZoomingTo] = useState<string | null>(null);
@@ -251,7 +285,7 @@ export default function Globe3D({
   const Globe = GlobeModule;
 
   return (
-    <div ref={globeRef} className="w-full h-full relative" style={{ cursor: "grab" }}>
+    <div ref={globeRef} className="w-full h-full relative overflow-hidden" style={{ cursor: "grab" }}>
       <Globe
         ref={globeInstanceRef}
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
@@ -354,8 +388,8 @@ export default function Globe3D({
         
         // Performance
         animateIn={true}
-        width={typeof window !== "undefined" ? window.innerWidth - 320 : 800}
-        height={typeof window !== "undefined" ? window.innerHeight : 600}
+        width={dimensions.width}
+        height={dimensions.height}
       />
       
       {/* Zoom Animation Overlay */}
